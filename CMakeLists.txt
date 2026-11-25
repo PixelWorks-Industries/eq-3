@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(NOIR_EQ VERSION 0.2.4)
+project(NOIR_EQ VERSION 0.2.5)
 
 # NOIR EQ never shipped as a VST2, so VST3 must not try to stay param-ID compatible with one.
 # Set globally (before JUCE is added) so it reaches JUCE's own VST3 wrapper target too.

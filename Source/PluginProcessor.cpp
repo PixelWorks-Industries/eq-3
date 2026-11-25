@@ -45,8 +45,9 @@ void NoireqAudioProcessor::prepareToPlay(double sr, int block)
     fftData.fill(0.0f); fftWritePosition = 0;
     filtersInitialised = false;
     updateFilters();
+    prepared.store(true);
 }
-void NoireqAudioProcessor::releaseResources() {}
+void NoireqAudioProcessor::releaseResources() { prepared.store(false); }
 
 void NoireqAudioProcessor::updateFilters()
 {
@@ -63,12 +64,14 @@ void NoireqAudioProcessor::updateFilters()
 
     if (! filtersInitialised || eqNow != lastEqParams)
     {
+        const float nyquistLimit = (float) (sr * 0.45);
+        auto safeHz = [nyquistLimit](float hz) { return juce::jlimit(10.0f, nyquistLimit, hz); };
         auto low = juce::dsp::IIR::Coefficients<float>::makeLowShelf(
-            sr, eqNow[0], 0.707f, juce::Decibels::decibelsToGain(eqNow[1]));
+            sr, safeHz(eqNow[0]), 0.707f, juce::Decibels::decibelsToGain(eqNow[1]));
         auto mid = juce::dsp::IIR::Coefficients<float>::makePeakFilter(
-            sr, eqNow[2], eqNow[4], juce::Decibels::decibelsToGain(eqNow[3]));
+            sr, safeHz(eqNow[2]), juce::jmax(0.1f, eqNow[4]), juce::Decibels::decibelsToGain(eqNow[3]));
         auto high = juce::dsp::IIR::Coefficients<float>::makeHighShelf(
-            sr, eqNow[5], 0.707f, juce::Decibels::decibelsToGain(eqNow[6]));
+            sr, safeHz(eqNow[5]), 0.707f, juce::Decibels::decibelsToGain(eqNow[6]));
         for (auto* c : { &chainL, &chainR })
         {
             c->get<0>().coefficients = low;
@@ -95,6 +98,7 @@ void NoireqAudioProcessor::updateFilters()
 void NoireqAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
     juce::ScopedNoDenormals noDenormals;
+    if (! prepared.load() || buffer.getNumChannels() < 1) return;
     updateFilters();
     const bool eq = parameters.getRawParameterValue("eqOn")->load() > 0.5f;
     const bool comp = parameters.getRawParameterValue("compOn")->load() > 0.5f;
@@ -103,7 +107,8 @@ void NoireqAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::
     const float makeup = juce::Decibels::decibelsToGain(parameters.getRawParameterValue("makeup")->load());
     float blockPeakIn[2] { 0.0f, 0.0f }, blockPeakOut[2] { 0.0f, 0.0f };
 
-    for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+    const int processChannels = juce::jmin(buffer.getNumChannels(), 2); // chains/meters are stereo
+    for (int ch = 0; ch < processChannels; ++ch)
     {
         auto* data = buffer.getReadPointer(ch);
         for (int n = 0; n < buffer.getNumSamples(); ++n)
@@ -139,7 +144,7 @@ void NoireqAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::
 
     // Feed a mono tap into a 2048-point FFT. Audio thread owns the FFT buffer;
     // the UI reads only the smoothed atomic band values.
-    const int channels = buffer.getNumChannels();
+    const int channels = processChannels;
     for (int n = 0; n < buffer.getNumSamples(); ++n)
     {
         float sample = 0.0f;

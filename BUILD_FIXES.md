@@ -22,3 +22,10 @@ The source was checked for remaining instances of the reported invalid API patte
 
 - The VST3 `C1189` fix now also sits at the top of `CMakeLists.txt` as a global `add_compile_definitions(...)`, set before JUCE is fetched, so it is guaranteed to reach JUCE's own VST3 wrapper target (not just the plugin target).
 - Project version bumped to 0.2.4. JUCE stays pinned at 8.0.10 (the FontOptions code is verified against it by the CI log).
+
+# Fixes in 0.2.5 (runtime crash in FL Studio)
+
+- **Crash on load ("plugin crashed while loading its settings")**: the editor constructor called `setSize()` first. `setSize()` immediately runs `resized()`, which dereferenced the 12 knob controls before they had been created (null pointer). `setSize()` now runs last, and `resized()` skips controls that don't exist yet.
+- `processBlock` now returns early until `prepareToPlay` has run, and never indexes past 2 channels (meters/filter chains are stereo).
+- EQ frequencies are clamped below Nyquist, and mid Q has a floor, so low sample rates can't produce NaN filter coefficients.
+- Removed the two `<pattern>` fills from `noir_plate.svg`; JUCE's SVG renderer doesn't support patterns.

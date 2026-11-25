@@ -38,7 +38,6 @@ void NoirLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int w, i
 NoireqAudioProcessorEditor::NoireqAudioProcessorEditor(NoireqAudioProcessor& p)
  : AudioProcessorEditor(&p), audioProcessor(p), eqAttach(p.parameters, "eqOn", eqButton), compAttach(p.parameters, "compOn", compButton)
 {
-    setSize(1000, 700);
     // Embedded original SVG artwork: subtle machined-surface grain + NOIR monogram.
     // These are compiled into the plugin, so no external asset folder is needed at runtime.
     if (auto xml = juce::XmlDocument::parse(juce::String::fromUTF8(BinaryData::noir_plate_svg, BinaryData::noir_plate_svgSize)))
@@ -69,6 +68,7 @@ NoireqAudioProcessorEditor::NoireqAudioProcessorEditor(NoireqAudioProcessor& p)
     eqButton.setClickingTogglesState(true); compButton.setClickingTogglesState(true);
     resetButton.onClick = [this] { for (auto* id : ids) if (auto* v = audioProcessor.parameters.getParameter(id)) v->setValueNotifyingHost(v->getDefaultValue()); };
     startTimerHz(24);
+    setSize(1000, 700); // last: this calls resized(), which needs the controls above to exist
 }
 
 void NoireqAudioProcessorEditor::timerCallback() { repaint(); }
@@ -167,8 +167,14 @@ void NoireqAudioProcessorEditor::paint(juce::Graphics& g)
 void NoireqAudioProcessorEditor::resized()
 {
     const int left=28, width=944, cell=width/6;
-    for(int i=0;i<6;++i){auto& c=*controls[(size_t)i]; c.label.setBounds(left+i*cell,438,cell,15); c.slider.setBounds(left+i*cell+8,451,cell-16,68);}
-    for(int i=6;i<12;++i){auto& c=*controls[(size_t)i]; c.label.setBounds(left+(i-6)*cell,565,cell,15); c.slider.setBounds(left+(i-6)*cell+8,578,cell-16,70);}
+    for(int i=0;i<12;++i)
+    {
+        auto* c = controls[(size_t)i].get();
+        if (c == nullptr) continue; // resized() can run before the controls are built
+        const int col = i % 6;
+        if (i < 6) { c->label.setBounds(left+col*cell,438,cell,15); c->slider.setBounds(left+col*cell+8,451,cell-16,68); }
+        else       { c->label.setBounds(left+col*cell,565,cell,15); c->slider.setBounds(left+col*cell+8,578,cell-16,70); }
+    }
     eqButton.setBounds(750, 22, 58, 27); compButton.setBounds(814,22,72,27); resetButton.setBounds(892,22,80,27);
 }
 

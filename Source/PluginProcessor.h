@@ -39,6 +39,7 @@ private:
     std::array<float, 7> lastEqParams {};
     std::array<float, 4> lastCompParams {};
     bool filtersInitialised = false;
+    std::atomic<bool> prepared { false };
     static constexpr int fftOrder = 11;
     static constexpr int fftSize = 1 << fftOrder;
     juce::dsp::FFT fft { fftOrder };
